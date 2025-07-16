@@ -67,13 +67,18 @@ class RejoindreView(discord.ui.View):
 
         for i in range(10, 0, -1):
             await asyncio.sleep(1)
+            # Uniquement l'emoji pile 🪙 durant le suspense
             suspense_embed.title = f"🪙  Tirage en cours ..."
             await original_message.edit(embed=suspense_embed)
 
         resultat = random.choice(["Pile", "Face"])
+        resultat_emoji = "🪙" if resultat == "Pile" else "🧿"
 
         # Déterminer gagnant
         choix_joueur2 = "Face" if self.choix_joueur1 == "Pile" else "Pile"
+        choix_joueur1_emoji = "🪙" if self.choix_joueur1 == "Pile" else "🧿"
+        choix_joueur2_emoji = "🪙" if choix_joueur2 == "Pile" else "🧿"
+
         gagnant = None
         if resultat == self.choix_joueur1:
             gagnant = self.joueur1
@@ -82,11 +87,13 @@ class RejoindreView(discord.ui.View):
 
         result_embed = discord.Embed(
             title="🎲 Résultat du Duel Pile ou Face",
-            description=f"🪙 Le résultat est : **{resultat}** !",
+            description=f"{resultat_emoji} Le résultat est : **{resultat}** !",
             color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
         )
-        result_embed.add_field(name="👤 Joueur 1", value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1}**", inline=True)
-        result_embed.add_field(name="👤 Joueur 2", value=f"{joueur2.mention}\nChoix : **{choix_joueur2}**", inline=True)
+        result_embed.add_field(name="👤 Joueur 1", value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**", inline=True)
+        result_embed.add_field(name="👤 Joueur 2", value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**", inline=True)
+        # Champ avec des tirets pour créer une ligne de séparation
+        result_embed.add_field(name=" ", value="─" * 20, inline=False) # Utilise des tirets '─' (barre horizontale légère)
         result_embed.add_field(name="🏆 Gagnant", value=f"**{gagnant.mention}** remporte **{2 * self.montant:,} kamas** 💰", inline=False)
         result_embed.set_footer(text="🪙 Duel terminé • Bonne chance pour le prochain !")
 
@@ -105,10 +112,11 @@ class PariView(discord.ui.View):
             return
 
         joueur1 = self.interaction.user
+        choix_emoji = "🪙" if choix == "Pile" else "🧿"
 
         embed = discord.Embed(
-            title="🪙 Duel Pile ou Face",
-            description=f"{joueur1.mention} a choisi : **{choix}**\nMontant : **{self.montant:,} kamas** 💰",
+            title="🪙 Nouveau Duel Pile ou Face",
+            description=f"{joueur1.mention} a choisi : **{choix} {choix_emoji}**\nMontant : **{self.montant:,} kamas** 💰",
             color=discord.Color.orange()
         )
         embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention} - {choix}", inline=True)
@@ -127,11 +135,11 @@ class PariView(discord.ui.View):
             "choix": choix
         }
 
-    @discord.ui.button(label="Pile", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Pile 🪙", style=discord.ButtonStyle.primary)
     async def pile(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.lock_in_choice(interaction, "Pile")
 
-    @discord.ui.button(label="Face", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Face 🧿", style=discord.ButtonStyle.secondary)
     async def face(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.lock_in_choice(interaction, "Face")
 
