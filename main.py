@@ -58,7 +58,7 @@ class RejoindreView(discord.ui.View):
 
         suspense_embed = discord.Embed(
             title="🪙 Le pile ou face est en cours...",
-            description="on croise les doigts 🤞🏻 !",
+            description="On croise les doigts 🤞🏻 !",
             color=discord.Color.greyple()
         )
         suspense_embed.set_image(url="https://www.cliqueduplateau.com/wordpress/wp-content/uploads/2015/12/flip.gif")  # Gif suspense
