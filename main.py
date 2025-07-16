@@ -57,7 +57,6 @@ class RejoindreView(discord.ui.View):
         original_message = await interaction.channel.fetch_message(self.message_id)
 
         suspense_embed = discord.Embed(
-            title="🪙 Le pile ou face est en cours...",
             description="Prépare-toi au tirage !",
             color=discord.Color.greyple()
         )
