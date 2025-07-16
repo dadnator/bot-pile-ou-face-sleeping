@@ -58,7 +58,7 @@ class RejoindreView(discord.ui.View):
 
         suspense_embed = discord.Embed(
             title="🪙 Le pile ou face est en cours...",
-            description="Prépare-toi au tirage !",
+            description="on croise les doigts 🤞🏻 !",
             color=discord.Color.greyple()
         )
         suspense_embed.set_image(url="https://www.cliqueduplateau.com/wordpress/wp-content/uploads/2015/12/flip.gif")  # Gif suspense
@@ -67,7 +67,7 @@ class RejoindreView(discord.ui.View):
 
         for i in range(10, 0, -1):
             await asyncio.sleep(1)
-            suspense_embed.title = f"🪙 Résultat dans... {i}"
+            suspense_embed.title = f"🪙  Tirage en cours !"
             await original_message.edit(embed=suspense_embed)
 
         resultat = random.choice(["Pile", "Face"])
