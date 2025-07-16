@@ -2,6 +2,7 @@ import os
 import discord
 from discord import app_commands
 from discord.ext import commands
+from keep_alive import keep_alive
 import random
 import asyncio
 
@@ -207,4 +208,5 @@ async def on_ready():
     except Exception as e:
         print(f"Erreur : {e}")
 
+keep_alive()
 bot.run(token)
