@@ -57,6 +57,7 @@ class RejoindreView(discord.ui.View):
         original_message = await interaction.channel.fetch_message(self.message_id)
 
         suspense_embed = discord.Embed(
+            title="🪙 Le pile ou face est en cours...",
             description="Prépare-toi au tirage !",
             color=discord.Color.greyple()
         )
@@ -81,7 +82,6 @@ class RejoindreView(discord.ui.View):
 
         result_embed = discord.Embed(
             title="🎲 Résultat du Duel Pile ou Face",
-            description=f"🪙 Le résultat est : **{resultat}** !",
             color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
         )
         result_embed.add_field(name="👤 Joueur 1", value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1}**", inline=True)
