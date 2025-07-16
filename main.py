@@ -82,6 +82,7 @@ class RejoindreView(discord.ui.View):
 
         result_embed = discord.Embed(
             title="🎲 Résultat du Duel Pile ou Face",
+            description=f"🪙 Le résultat est : **{resultat}** !",
             color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
         )
         result_embed.add_field(name="👤 Joueur 1", value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1}**", inline=True)
