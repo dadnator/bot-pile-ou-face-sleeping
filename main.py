@@ -143,10 +143,6 @@ async def lock_in_choice(self, interaction, choix):
         await interaction.response.send_message("❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True)
         return
 
-    # ... suite du code ...
-
-
-
     joueur1 = self.interaction.user
 
     embed = discord.Embed(
@@ -161,18 +157,22 @@ async def lock_in_choice(self, interaction, choix):
     role = discord.utils.get(interaction.guild.roles, name="sleeping")
     mention = role.mention if role else "@sleeping"
 
-    # Envoie un message mention + embed DUEL dans le channel (nouveau message)
-    await interaction.followup.send(content=f"{mention} — Un nouveau duel est prêt !", embed=embed)
+    # Envoie un message public mention + embed
+    await interaction.channel.send(content=f"{mention} — Un nouveau duel est prêt !", embed=embed)
 
-    # Edit la réponse initiale de l'interaction (celle avec les boutons) pour retirer la vue
+    # Supprime les boutons du message initial
     await interaction.response.edit_message(view=None)
 
-    duels[interaction.message.id] = {
-        "joueur1": joueur1,
-        "montant": self.montant,
-        "choix_joueur1": choix,
-        "joueur2": None
-    }
+    # Stocke le duel dans le dict (clé = ID du message envoyé ci-dessus)
+    last_message = await interaction.channel.history(limit=1).flatten()
+    if last_message:
+        duel_msg = last_message[0]
+        duels[duel_msg.id] = {
+            "joueur1": joueur1,
+            "montant": self.montant,
+            "choix_joueur1": choix,
+            "joueur2": None
+        }
 
 
         await interaction.response.edit_message(embed=embed, view=None)
