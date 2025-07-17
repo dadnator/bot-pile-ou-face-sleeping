@@ -64,7 +64,7 @@ class RejoindreView(discord.ui.View):
             description="On croise les doigts 🤞🏻 !",
             color=discord.Color.greyple()
         )
-        suspense_embed.set_image(url="https://www.cliqueduplateau.com/wordpress/wp-content/uploads/2015/12/flip.gif")
+        suspense_embed.set_image(url="https://www.cliqueduplateau.com/wordpress/wp-content/uploads/2015/12/flip.gif")  # Gif suspense
 
         await original_message.edit(embed=suspense_embed, view=None)
 
@@ -76,11 +76,16 @@ class RejoindreView(discord.ui.View):
         resultat = random.choice(["Pile", "Face"])
         resultat_emoji = "🪙" if resultat == "Pile" else "🧿"
 
+        # Déterminer gagnant
         choix_joueur2 = "Face" if self.choix_joueur1 == "Pile" else "Pile"
         choix_joueur1_emoji = "🪙" if self.choix_joueur1 == "Pile" else "🧿"
         choix_joueur2_emoji = "🪙" if choix_joueur2 == "Pile" else "🧿"
 
-        gagnant = self.joueur1 if resultat == self.choix_joueur1 else joueur2
+        gagnant = None
+        if resultat == self.choix_joueur1:
+            gagnant = self.joueur1
+        else:
+            gagnant = joueur2
 
         result_embed = discord.Embed(
             title="🎲 Résultat du Duel Pile ou Face",
@@ -119,13 +124,11 @@ class PariView(discord.ui.View):
         embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
         embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name} - {choix}")
 
-        # Ping du rôle sleeping avant l'embed dans le même message
         role = discord.utils.get(interaction.guild.roles, name="sleeping")
         mention = role.mention if role else "@sleeping"
 
-        # Envoie d'abord le message sans view pour récupérer l'id
-        message = await interaction.channel.send(content=mention, embed=embed)
-        # Crée et associe la view avec le message.id
+        # Envoie du message avec ping + texte personnalisé
+        message = await interaction.channel.send(content=f"{mention} — Un nouveau duel est prêt !", embed=embed)
         rejoindre_view = RejoindreView(message_id=message.id, joueur1=joueur1, choix_joueur1=choix, montant=self.montant)
         await message.edit(view=rejoindre_view)
 
@@ -180,12 +183,12 @@ async def sleeping(interaction: discord.Interaction, montant: int):
 @bot.tree.command(name="quit", description="Annule le duel en cours que tu as lancé.")
 @is_sleeping()
 async def quit_duel(interaction: discord.Interaction):
-    print("DEBUG /quit - duels keys:", list(duels.keys()))
-    print("DEBUG /quit - user id:", interaction.user.id)
+    if interaction.channel.name != "pile-ou-face-sleeping":
+        await interaction.response.send_message("❌ Tu dois utiliser cette commande dans le salon `#pile-ou-face-sleeping`.", ephemeral=True)
+        return
 
     duel_a_annuler = None
     for message_id, duel_data in duels.items():
-        print(f"DEBUG checking duel: message_id={message_id}, joueur1_id={duel_data['joueur1'].id}")
         if duel_data["joueur1"].id == interaction.user.id:
             duel_a_annuler = message_id
             break
@@ -204,8 +207,8 @@ async def quit_duel(interaction: discord.Interaction):
         embed.title += " (Annulé)"
         embed.description = "⚠️ Ce duel a été annulé par son créateur."
         await message.edit(embed=embed, view=None)
-    except Exception as e:
-        print(f"Erreur lors de l'édition du message duel annulé : {e}")
+    except Exception:
+        pass
 
     await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
 
