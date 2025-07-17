@@ -56,6 +56,9 @@ class RejoindreView(discord.ui.View):
         await interaction.response.defer()
         original_message = await interaction.channel.fetch_message(self.message_id)
 
+        # Pause de 3 secondes avant de lancer le suspense
+        await asyncio.sleep(3)
+
         suspense_embed = discord.Embed(
             title="🪙 Le pile ou face est en cours...",
             description="On croise les doigts 🤞🏻 !",
@@ -67,7 +70,6 @@ class RejoindreView(discord.ui.View):
 
         for i in range(10, 0, -1):
             await asyncio.sleep(1)
-            # Uniquement l'emoji pile 🪙 durant le suspense
             suspense_embed.title = f"🪙  Tirage en cours ..."
             await original_message.edit(embed=suspense_embed)
 
@@ -92,8 +94,7 @@ class RejoindreView(discord.ui.View):
         )
         result_embed.add_field(name="👤 Joueur 1", value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**", inline=True)
         result_embed.add_field(name="👤 Joueur 2", value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**", inline=True)
-        # Champ avec des tirets pour créer une ligne de séparation
-        result_embed.add_field(name=" ", value="─" * 20, inline=False) # Utilise des tirets '─' (barre horizontale légère)
+        result_embed.add_field(name=" ", value="─" * 20, inline=False)
         result_embed.add_field(name="🏆 Gagnant", value=f"**{gagnant.mention}** remporte **{2 * self.montant:,} kamas** 💰", inline=False)
         result_embed.set_footer(text="🪙 Duel terminé • Bonne chance pour le prochain !")
 
@@ -123,11 +124,19 @@ class PariView(discord.ui.View):
         embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
         embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name} - {choix}")
 
+        # Ajout du ping @sleeping avant l'embed dans le même message
+        role = discord.utils.get(interaction.guild.roles, name="sleeping")
+        mention = role.mention if role else "@sleeping"
+
         await interaction.response.edit_message(embed=embed, view=None)
 
-        rejoindre_view = RejoindreView(message_id=None, joueur1=joueur1, choix_joueur1=choix, montant=self.montant)
-        message = await interaction.channel.send(embed=embed, view=rejoindre_view)
-        rejoindre_view.message_id = message.id
+        message = await interaction.channel.send(content=mention, embed=embed, view=RejoindreView(message_id=None, joueur1=joueur1, choix_joueur1=choix, montant=self.montant))
+        # Assigne l'id du message au view
+        message.components[0].children[0].view.message_id = message.id  # Pas idéal, on va plutôt faire ci-dessous:
+
+        # Mieux : crée la view d'abord, assigne l'id puis envoie
+        rejoindre_view = RejoindreView(message_id=message.id, joueur1=joueur1, choix_joueur1=choix, montant=self.montant)
+        await message.edit(view=rejoindre_view)
 
         duels[message.id] = {
             "joueur1": joueur1,
@@ -218,3 +227,4 @@ async def on_ready():
 
 keep_alive()
 bot.run(token)
+
