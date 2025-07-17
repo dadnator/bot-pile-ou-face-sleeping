@@ -210,10 +210,9 @@ async def quit_duel(interaction: discord.Interaction):
     except Exception:
         pass
 
-    # Utilisation de response.send_message ou response.defer ?
-    # Ici on fait un defer + followup pour éviter l'erreur "interaction déjà répondu"
-    await interaction.response.defer(ephemeral=True)
-    await interaction.followup.send("✅ Ton duel a bien été annulé.", ephemeral=True)
+    # Réponse unique ici, pas de defer ni followup
+    await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
+
 
 @bot.event
 async def on_ready():
