@@ -183,10 +183,11 @@ async def sleeping(interaction: discord.Interaction, montant: int):
     embed.add_field(name="Choix", value="Clique sur un bouton ci-dessous : Pile / Face", inline=False)
 
     view = PariView(interaction, montant)
-    
-    # ✅ Correction de l'erreur 404 — interaction expirée
-    await interaction.response.defer(ephemeral=True)
-    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+    # Ici tu peux soit répondre directement, soit defer et followup
+    # Mais pas les deux à la fois et surtout pas après un send_message déjà appelé
+
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
 @bot.tree.command(name="quit", description="Annule le duel en cours que tu as lancé.")
