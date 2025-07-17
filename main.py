@@ -68,7 +68,7 @@ class RejoindreView(discord.ui.View):
         await original_message.edit(embed=player2_joined_embed, view=None)
 
         # Ajouter un délai de 3 secondes ici
-        await asyncio.sleep(3)
+        await asyncio.sleep(5)
 
         suspense_embed = discord.Embed(
             title="🪙 Le pile ou face est en cours...",
