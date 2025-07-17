@@ -56,68 +56,44 @@ class RejoindreView(discord.ui.View):
         await interaction.response.defer()
         original_message = await interaction.channel.fetch_message(self.message_id)
 
-        # On affiche un embed avec les choix des deux joueurs avant suspense
-        choix_joueur1_emoji = "🪙" if self.choix_joueur1 == "Pile" else "🧿"
-        choix_joueur2 = "Face" if self.choix_joueur1 == "Pile" else "Pile"
-        choix_joueur2_emoji = "🪙" if choix_joueur2 == "Pile" else "🧿"
-
-        embed_choix = discord.Embed(
-            title="🪙 Duel Pile ou Face démarré",
-            description=f"Montant : **{self.montant:,} kamas** 💰",
-            color=discord.Color.orange()
-        )
-        embed_choix.add_field(
-            name="👤 Joueur 1",
-            value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**",
-            inline=True
-        )
-        embed_choix.add_field(
-            name="👤 Joueur 2",
-            value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**",
-            inline=True
-        )
-        embed_choix.set_footer(text=f"📋 Duel lancé par {self.joueur1.display_name}")
-
-        await original_message.edit(embed=embed_choix, view=self)
-
-        # Pause de 3 secondes avant de lancer le suspense
-        await asyncio.sleep(3)
-
         suspense_embed = discord.Embed(
             title="🪙 Le pile ou face est en cours...",
             description="On croise les doigts 🤞🏻 !",
             color=discord.Color.greyple()
         )
-        suspense_embed.set_image(url="https://www.cliqueduplateau.com/wordpress/wp-content/uploads/2015/12/flip.gif")
+        suspense_embed.set_image(url="https://www.cliqueduplateau.com/wordpress/wp-content/uploads/2015/12/flip.gif")  # Gif suspense
 
         await original_message.edit(embed=suspense_embed, view=None)
 
         for i in range(10, 0, -1):
             await asyncio.sleep(1)
+            # Uniquement l'emoji pile 🪙 durant le suspense
             suspense_embed.title = f"🪙  Tirage en cours ..."
             await original_message.edit(embed=suspense_embed)
 
         resultat = random.choice(["Pile", "Face"])
         resultat_emoji = "🪙" if resultat == "Pile" else "🧿"
 
-        gagnant = self.joueur1 if resultat == self.choix_joueur1 else joueur2
+        # Déterminer gagnant
+        choix_joueur2 = "Face" if self.choix_joueur1 == "Pile" else "Pile"
+        choix_joueur1_emoji = "🪙" if self.choix_joueur1 == "Pile" else "🧿"
+        choix_joueur2_emoji = "🪙" if choix_joueur2 == "Pile" else "🧿"
+
+        gagnant = None
+        if resultat == self.choix_joueur1:
+            gagnant = self.joueur1
+        else:
+            gagnant = joueur2
 
         result_embed = discord.Embed(
             title="🎲 Résultat du Duel Pile ou Face",
             description=f"{resultat_emoji} Le résultat est : **{resultat}** !",
             color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
         )
-        result_embed.add_field(
-            name="👤 Joueur 1",
-            value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**",
-            inline=True
-        )
-        result_embed.add_field(
-            name="👤 Joueur 2",
-            value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**",
-            inline=True
-        )
-        result_embed.add_field(name=" ", value="─" * 20, inline=False)
+        result_embed.add_field(name="👤 Joueur 1", value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**", inline=True)
+        result_embed.add_field(name="👤 Joueur 2", value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**", inline=True)
+        # Champ avec des tirets pour créer une ligne de séparation
+        result_embed.add_field(name=" ", value="─" * 20, inline=False) # Utilise des tirets '─' (barre horizontale légère)
         result_embed.add_field(name="🏆 Gagnant", value=f"**{gagnant.mention}** remporte **{2 * self.montant:,} kamas** 💰", inline=False)
         result_embed.set_footer(text="🪙 Duel terminé • Bonne chance pour le prochain !")
 
@@ -130,6 +106,44 @@ class PariView(discord.ui.View):
         self.interaction = interaction
         self.montant = montant
 
+    async def lock_in_choice(self, interaction, choix):
+        if interaction.user.id != self.interaction.user.id:
+            await interaction.response.send_message("❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True)
+            return
+
+        joueur1 = self.interaction.user
+        choix_emoji = "🪙" if choix == "Pile" else "🧿"
+
+        embed = discord.Embed(
+            title="🪙 Nouveau Duel Pile ou Face",
+            description=f"{joueur1.mention} a choisi : **{choix} {choix_emoji}**\nMontant : **{self.montant:,} kamas** 💰",
+            color=discord.Color.orange()
+        )
+        embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention} - {choix}", inline=True)
+        embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
+        embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name} - {choix}")
+
+        await interaction.response.edit_message(embed=embed, view=None)
+
+        rejoindre_view = RejoindreView(message_id=None, joueur1=joueur1, choix_joueur1=choix, montant=self.montant)
+        
+        # ✅ Mention du rôle "sleeping" dans le même message que l'embed
+        role = discord.utils.get(interaction.guild.roles, name="sleeping")
+        message = await interaction.channel.send(
+            content=f"{role.mention} — Un nouveau duel est prêt !",
+            embed=embed,
+            view=rejoindre_view,
+            allowed_mentions=discord.AllowedMentions(roles=True)
+        )
+
+        rejoindre_view.message_id = message.id
+
+        duels[message.id] = {
+            "joueur1": joueur1,
+            "montant": self.montant,
+            "choix": choix
+        }
+
     @discord.ui.button(label="Pile 🪙", style=discord.ButtonStyle.primary)
     async def pile(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.lock_in_choice(interaction, "Pile")
@@ -138,44 +152,6 @@ class PariView(discord.ui.View):
     async def face(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.lock_in_choice(interaction, "Face")
 
-async def lock_in_choice(self, interaction, choix):
-    if interaction.user.id != self.interaction.user.id:
-        await interaction.response.send_message("❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True)
-        return
-
-    joueur1 = self.interaction.user
-
-    embed = discord.Embed(
-        title="🪙 Nouveau Duel Pile ou Face",
-        description=f"Montant : **{self.montant:,} kamas** 💰",
-        color=discord.Color.orange()
-    )
-    embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention}", inline=True)
-    embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
-    embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name}")
-
-    role = discord.utils.get(interaction.guild.roles, name="sleeping")
-    mention = role.mention if role else "@sleeping"
-
-    # Envoie un message public mention + embed
-    await interaction.channel.send(content=f"{mention} — Un nouveau duel est prêt !", embed=embed)
-
-    # Supprime les boutons du message initial
-    await interaction.response.edit_message(view=None)
-
-    # Stocke le duel dans le dict (clé = ID du message envoyé ci-dessus)
-    last_message = await interaction.channel.history(limit=1).flatten()
-    if last_message:
-        duel_msg = last_message[0]
-        duels[duel_msg.id] = {
-            "joueur1": joueur1,
-            "montant": self.montant,
-            "choix_joueur1": choix,
-            "joueur2": None
-        }
-
-
-        await interaction.response.edit_message(embed=embed, view=None)
 
 @bot.tree.command(name="sleeping", description="Lancer un duel pile ou face avec un montant.")
 @is_sleeping()
@@ -191,7 +167,7 @@ async def sleeping(interaction: discord.Interaction, montant: int):
 
     for duel_data in duels.values():
         if duel_data["joueur1"].id == interaction.user.id or (
-            duel_data.get("joueur2") and duel_data["joueur2"] and duel_data["joueur2"].id == interaction.user.id
+            "joueur2" in duel_data and duel_data["joueur2"] and duel_data["joueur2"].id == interaction.user.id
         ):
             await interaction.response.send_message(
                 "❌ Tu participes déjà à un autre duel. Termine-le ou utilise `/quit` pour l'annuler.",
@@ -207,34 +183,27 @@ async def sleeping(interaction: discord.Interaction, montant: int):
     embed.add_field(name="Choix", value="Clique sur un bouton ci-dessous : Pile / Face", inline=False)
 
     view = PariView(interaction, montant)
-    # --- On répond une seule fois avec send_message ---
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-
-@bot.tree.command(name="quit", description="Annule ton duel en cours.")
+@bot.tree.command(name="quit", description="Annule le duel en cours que tu as lancé.")
+@is_sleeping()
 async def quit_duel(interaction: discord.Interaction):
-    # Exemple simple pour retrouver un duel en cours (à adapter selon ta structure)
-    duel = None
-    for duel_data in duels.values():
-        if duel_data["joueur1"].id == interaction.user.id or (
-            duel_data.get("joueur2") and duel_data["joueur2"].id == interaction.user.id
-        ):
-            duel = duel_data
+    if interaction.channel.name != "pile-ou-face-sleeping":
+        await interaction.response.send_message("❌ Tu dois utiliser cette commande dans le salon `#pile-ou-face-sleeping`.", ephemeral=True)
+        return
+
+    duel_a_annuler = None
+    for message_id, duel_data in duels.items():
+        if duel_data["joueur1"].id == interaction.user.id:
+            duel_a_annuler = message_id
             break
 
-    if duel is None:
-        # Première réponse avec send_message car c’est la toute première réponse
+    if duel_a_annuler is None:
         await interaction.response.send_message("❌ Tu n'as aucun duel en attente à annuler.", ephemeral=True)
         return
 
-    # Supprime ou annule le duel
-    duels.pop(duel.get("message_id"), None)
+    duels.pop(duel_a_annuler)
 
-    # Envoie la confirmation en réponse (toujours la première réponse dans une commande)
-    await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
-
-
-    # Puis éditer le message sans répondre à l'interaction (donc pas interaction.response)
     try:
         channel = interaction.channel
         message = await channel.fetch_message(duel_a_annuler)
@@ -243,9 +212,10 @@ async def quit_duel(interaction: discord.Interaction):
         embed.title += " (Annulé)"
         embed.description = "⚠️ Ce duel a été annulé par son créateur."
         await message.edit(embed=embed, view=None)
-    except Exception as e:
-        print(f"Erreur lors de l'édition du message d'annulation : {e}")
+    except Exception:
+        pass
 
+    await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
 
 @bot.event
 async def on_ready():
@@ -254,7 +224,7 @@ async def on_ready():
         await bot.tree.sync()
         print("✅ Commandes synchronisées.")
     except Exception as e:
-        print(f"Erreur lors de la synchronisation : {e}")
+        print(f"Erreur : {e}")
 
 keep_alive()
 bot.run(token)
