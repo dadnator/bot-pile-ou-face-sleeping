@@ -206,29 +206,25 @@ async def quit_duel(interaction: discord.Interaction):
         await interaction.response.send_message("❌ Tu n'as aucun duel en attente à annuler.", ephemeral=True)
         return
 
+    # ✅ On répond tout de suite pour éviter les erreurs
+    await interaction.response.defer(ephemeral=True)
+
     duels.pop(duel_a_annuler)
 
     try:
         channel = interaction.channel
         message = await channel.fetch_message(duel_a_annuler)
-        embed = message.embeds[0]
-        embed.color = discord.Color.red()
-        embed.title += " (Annulé)"
-        embed.description = "⚠️ Ce duel a été annulé par son créateur."
-        await message.edit(embed=embed, view=None)
+        if message.embeds:
+            embed = message.embeds[0]
+            embed.color = discord.Color.red()
+            embed.title += " (Annulé)"
+            embed.description = "⚠️ Ce duel a été annulé par son créateur."
+            await message.edit(embed=embed, view=None)
     except Exception:
         pass
 
-    await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
+    await interaction.followup.send("✅ Ton duel a bien été annulé.", ephemeral=True)
 
-@bot.event
-async def on_ready():
-    print(f"{bot.user} est prêt !")
-    try:
-        await bot.tree.sync()
-        print("✅ Commandes synchronisées.")
-    except Exception as e:
-        print(f"Erreur : {e}")
 
 keep_alive()
 bot.run(token)
