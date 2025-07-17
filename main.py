@@ -56,6 +56,20 @@ class RejoindreView(discord.ui.View):
         await interaction.response.defer()
         original_message = await interaction.channel.fetch_message(self.message_id)
 
+        # Mettre à jour l'embed immédiatement après que le joueur 2 a rejoint
+        player2_joined_embed = discord.Embed(
+            title="🤝 Duel en attente de lancement...",
+            description=f"{self.joueur1.mention} (Choix: **{self.choix_joueur1}**) et {joueur2.mention} sont prêts ! "
+                        f"Montant: **{self.montant:,} kamas** 💰\n\n"
+                        f"Le pile ou face va commencer dans un instant...",
+            color=discord.Color.blue()
+        )
+        player2_joined_embed.set_footer(text="Préparation du tirage...")
+        await original_message.edit(embed=player2_joined_embed, view=None)
+
+        # Ajouter un délai de 3 secondes ici
+        await asyncio.sleep(3)
+
         suspense_embed = discord.Embed(
             title="🪙 Le pile ou face est en cours...",
             description="On croise les doigts 🤞🏻 !",
