@@ -139,34 +139,37 @@ class PariView(discord.ui.View):
         await self.lock_in_choice(interaction, "Face")
 
     async def lock_in_choice(self, interaction, choix):
-        if interaction.user.id != self.interaction.user.id:
-            await interaction.response.send_message("❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True)
-            return
+    if interaction.user.id != self.interaction.user.id:
+        await interaction.response.send_message("❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True)
+        return
 
-        joueur1 = self.interaction.user
+    joueur1 = self.interaction.user
 
-        embed = discord.Embed(
-            title="🪙 Nouveau Duel Pile ou Face",
-            description=f"Montant : **{self.montant:,} kamas** 💰",
-            color=discord.Color.orange()
-        )
-        embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention}", inline=True)
-        embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
-        embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name}")
+    embed = discord.Embed(
+        title="🪙 Nouveau Duel Pile ou Face",
+        description=f"Montant : **{self.montant:,} kamas** 💰",
+        color=discord.Color.orange()
+    )
+    embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention}", inline=True)
+    embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
+    embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name}")
 
-        role = discord.utils.get(interaction.guild.roles, name="sleeping")
-        mention = role.mention if role else "@sleeping"
+    role = discord.utils.get(interaction.guild.roles, name="sleeping")
+    mention = role.mention if role else "@sleeping"
 
-        message = await interaction.channel.send(content=f"{mention} — Un nouveau duel est prêt !", embed=embed)
-        rejoindre_view = RejoindreView(message_id=message.id, joueur1=joueur1, choix_joueur1=choix, montant=self.montant)
-        await message.edit(view=rejoindre_view)
+    # Envoie un message mention + embed DUEL dans le channel (nouveau message)
+    await interaction.followup.send(content=f"{mention} — Un nouveau duel est prêt !", embed=embed)
 
-        duels[message.id] = {
-            "joueur1": joueur1,
-            "montant": self.montant,
-            "choix_joueur1": choix,
-            "joueur2": None
-        }
+    # Edit la réponse initiale de l'interaction (celle avec les boutons) pour retirer la vue
+    await interaction.response.edit_message(view=None)
+
+    duels[interaction.message.id] = {
+        "joueur1": joueur1,
+        "montant": self.montant,
+        "choix_joueur1": choix,
+        "joueur2": None
+    }
+
 
         await interaction.response.edit_message(embed=embed, view=None)
 
@@ -200,33 +203,32 @@ async def sleeping(interaction: discord.Interaction, montant: int):
     embed.add_field(name="Choix", value="Clique sur un bouton ci-dessous : Pile / Face", inline=False)
 
     view = PariView(interaction, montant)
+    # --- On répond une seule fois avec send_message ---
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-@bot.tree.command(name="quit", description="Annule le duel en cours que tu as lancé.")
-@is_sleeping()
-async def quit_duel(interaction: discord.Interaction):
-    if interaction.channel.name != "pile-ou-face-sleeping":
-        await interaction.response.send_message(
-            "❌ Tu dois utiliser cette commande dans le salon `#pile-ou-face-sleeping`.", ephemeral=True
-        )
-        return
 
-    duel_a_annuler = None
-    for message_id, duel_data in duels.items():
-        joueur1 = duel_data.get("joueur1")
-        if joueur1 and joueur1.id == interaction.user.id:
-            duel_a_annuler = message_id
+@bot.tree.command(name="quit", description="Annule ton duel en cours.")
+async def quit_duel(interaction: discord.Interaction):
+    # Exemple simple pour retrouver un duel en cours (à adapter selon ta structure)
+    duel = None
+    for duel_data in duels.values():
+        if duel_data["joueur1"].id == interaction.user.id or (
+            duel_data.get("joueur2") and duel_data["joueur2"].id == interaction.user.id
+        ):
+            duel = duel_data
             break
 
-    if duel_a_annuler is None:
+    if duel is None:
+        # Première réponse avec send_message car c’est la toute première réponse
         await interaction.response.send_message("❌ Tu n'as aucun duel en attente à annuler.", ephemeral=True)
         return
 
-    # Retirer le duel avant de répondre
-    duels.pop(duel_a_annuler)
+    # Supprime ou annule le duel
+    duels.pop(duel.get("message_id"), None)
 
-    # Répondre UNE SEULE fois à l'interaction
+    # Envoie la confirmation en réponse (toujours la première réponse dans une commande)
     await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
+
 
     # Puis éditer le message sans répondre à l'interaction (donc pas interaction.response)
     try:
