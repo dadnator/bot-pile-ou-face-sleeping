@@ -13,6 +13,7 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 
 duels = {}
 
+# --- Check personnalisé pour rôle sleeping ---
 def is_sleeping():
     async def predicate(interaction: discord.Interaction) -> bool:
         role = discord.utils.get(interaction.guild.roles, name="sleeping")
@@ -55,7 +56,7 @@ class RejoindreView(discord.ui.View):
         await interaction.response.defer()
         original_message = await interaction.channel.fetch_message(self.message_id)
 
-        # Pause suspense
+        # Pause de 3 secondes avant de lancer le suspense
         await asyncio.sleep(3)
 
         suspense_embed = discord.Embed(
@@ -63,23 +64,28 @@ class RejoindreView(discord.ui.View):
             description="On croise les doigts 🤞🏻 !",
             color=discord.Color.greyple()
         )
-        suspense_embed.set_image(url="https://www.cliqueduplateau.com/wordpress/wp-content/uploads/2015/12/flip.gif")
+        suspense_embed.set_image(url="https://www.cliqueduplateau.com/wordpress/wp-content/uploads/2015/12/flip.gif")  # Gif suspense
 
         await original_message.edit(embed=suspense_embed, view=None)
 
-        for _ in range(10):
+        for i in range(10, 0, -1):
             await asyncio.sleep(1)
-            suspense_embed.title = "🪙 Tirage en cours ..."
+            suspense_embed.title = f"🪙  Tirage en cours ..."
             await original_message.edit(embed=suspense_embed)
 
         resultat = random.choice(["Pile", "Face"])
         resultat_emoji = "🪙" if resultat == "Pile" else "🧿"
 
+        # Déterminer gagnant
         choix_joueur2 = "Face" if self.choix_joueur1 == "Pile" else "Pile"
         choix_joueur1_emoji = "🪙" if self.choix_joueur1 == "Pile" else "🧿"
         choix_joueur2_emoji = "🪙" if choix_joueur2 == "Pile" else "🧿"
 
-        gagnant = self.joueur1 if resultat == self.choix_joueur1 else joueur2
+        gagnant = None
+        if resultat == self.choix_joueur1:
+            gagnant = self.joueur1
+        else:
+            gagnant = joueur2
 
         result_embed = discord.Embed(
             title="🎲 Résultat du Duel Pile ou Face",
@@ -107,27 +113,21 @@ class PariView(discord.ui.View):
             return
 
         joueur1 = self.interaction.user
-        choix_emoji = "🪙" if choix == "Pile" else "🧿"
-
+        # Plus de mention du choix dans l'embed
         embed = discord.Embed(
             title="🪙 Nouveau Duel Pile ou Face",
-            description=f"{joueur1.mention} a choisi : **{choix} {choix_emoji}**\nMontant : **{self.montant:,} kamas** 💰",
+            description=f"Montant : **{self.montant:,} kamas** 💰",
             color=discord.Color.orange()
         )
-        embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention} - {choix}", inline=True)
+        embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention}", inline=True)
         embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
-        embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name} - {choix}")
+        embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name}")
 
         role = discord.utils.get(interaction.guild.roles, name="sleeping")
         mention = role.mention if role else "@sleeping"
-        allowed_mentions = discord.AllowedMentions(roles=True)
 
-        # Message public dans le salon avec ping + texte
-        message = await interaction.channel.send(
-            content=f"{mention} — Un nouveau duel est prêt !",
-            embed=embed,
-            allowed_mentions=allowed_mentions
-        )
+        # Envoie du message avec ping + texte personnalisé
+        message = await interaction.channel.send(content=f"{mention} — Un nouveau duel est prêt !", embed=embed)
         rejoindre_view = RejoindreView(message_id=message.id, joueur1=joueur1, choix_joueur1=choix, montant=self.montant)
         await message.edit(view=rejoindre_view)
 
@@ -137,8 +137,8 @@ class PariView(discord.ui.View):
             "choix": choix
         }
 
-        # Confirmation privée à celui qui a cliqué
-        await interaction.response.send_message(f"Ton choix **{choix}** a bien été pris en compte !", ephemeral=True)
+        # On édite la réponse de l'interaction en mode "silent" (pas d'erreur)
+        await interaction.response.edit_message(embed=embed, view=None)
 
     @discord.ui.button(label="Pile 🪙", style=discord.ButtonStyle.primary)
     async def pile(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -178,7 +178,6 @@ async def sleeping(interaction: discord.Interaction, montant: int):
     embed.add_field(name="Choix", value="Clique sur un bouton ci-dessous : Pile / Face", inline=False)
 
     view = PariView(interaction, montant)
-    # On envoie un message éphémère avec les boutons pour que le joueur choisisse
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 @bot.tree.command(name="quit", description="Annule le duel en cours que tu as lancé.")
@@ -211,7 +210,10 @@ async def quit_duel(interaction: discord.Interaction):
     except Exception:
         pass
 
-    await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
+    # Utilisation de response.send_message ou response.defer ?
+    # Ici on fait un defer + followup pour éviter l'erreur "interaction déjà répondu"
+    await interaction.response.defer(ephemeral=True)
+    await interaction.followup.send("✅ Ton duel a bien été annulé.", ephemeral=True)
 
 @bot.event
 async def on_ready():
