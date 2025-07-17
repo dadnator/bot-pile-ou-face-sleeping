@@ -53,17 +53,10 @@ class RejoindreView(discord.ui.View):
 
         duel_data["joueur2"] = joueur2
         self.rejoindre.disabled = True
-
+        await interaction.response.defer()
         original_message = await interaction.channel.fetch_message(self.message_id)
 
-        # Met à jour le message immédiatement avec joueur 2 qui rejoint
-        embed = original_message.embeds[0]
-        embed.set_field_at(1, name="👤 Joueur 2", value=joueur2.mention, inline=True)
-        await original_message.edit(embed=embed, view=self)
-
-        await interaction.response.defer()
-
-        # Pause 3 secondes avant suspense
+        # Pause de 3 secondes avant de lancer le suspense
         await asyncio.sleep(3)
 
         suspense_embed = discord.Embed(
@@ -75,10 +68,9 @@ class RejoindreView(discord.ui.View):
 
         await original_message.edit(embed=suspense_embed, view=None)
 
-        # Compte à rebours suspense 10 secondes
         for i in range(10, 0, -1):
             await asyncio.sleep(1)
-            suspense_embed.title = f"🪙  Tirage en cours ... {i}s"
+            suspense_embed.title = f"🪙  Tirage en cours ..."
             await original_message.edit(embed=suspense_embed)
 
         resultat = random.choice(["Pile", "Face"])
@@ -110,13 +102,21 @@ class PariView(discord.ui.View):
         self.interaction = interaction
         self.montant = montant
 
+    @discord.ui.button(label="Pile 🪙", style=discord.ButtonStyle.primary)
+    async def pile(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.lock_in_choice(interaction, "Pile")
+
+    @discord.ui.button(label="Face 🧿", style=discord.ButtonStyle.secondary)
+    async def face(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.lock_in_choice(interaction, "Face")
+
     async def lock_in_choice(self, interaction, choix):
         if interaction.user.id != self.interaction.user.id:
             await interaction.response.send_message("❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True)
             return
 
         joueur1 = self.interaction.user
-        # Embed sans mention "Pari pris"
+
         embed = discord.Embed(
             title="🪙 Nouveau Duel Pile ou Face",
             description=f"Montant : **{self.montant:,} kamas** 💰",
@@ -124,6 +124,7 @@ class PariView(discord.ui.View):
         )
         embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention}", inline=True)
         embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
+        embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name}")
 
         role = discord.utils.get(interaction.guild.roles, name="sleeping")
         mention = role.mention if role else "@sleeping"
@@ -155,7 +156,7 @@ async def sleeping(interaction: discord.Interaction, montant: int):
 
     for duel_data in duels.values():
         if duel_data["joueur1"].id == interaction.user.id or (
-            "joueur2" in duel_data and duel_data["joueur2"] and duel_data["joueur2"].id == interaction.user.id
+            duel_data.get("joueur2") and duel_data["joueur2"] and duel_data["joueur2"].id == interaction.user.id
         ):
             await interaction.response.send_message(
                 "❌ Tu participes déjà à un autre duel. Termine-le ou utilise `/quit` pour l'annuler.",
@@ -196,28 +197,21 @@ async def quit_duel(interaction: discord.Interaction):
         channel = interaction.channel
         message = await channel.fetch_message(duel_a_annuler)
         embed = message.embeds[0]
-        embed.title += " ❌ (Duel annulé)"
+        embed.color = discord.Color.red()
+        embed.title += " (Annulé)"
+        embed.description = "⚠️ Ce duel a été annulé par son créateur."
         await message.edit(embed=embed, view=None)
     except Exception:
         pass
 
     await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
 
-# Boutons dans PariView pour Pile et Face
-@PariView.button(label="Pile", style=discord.ButtonStyle.primary)
-async def pile_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-    await self.lock_in_choice(interaction, "Pile")
-
-@PariView.button(label="Face", style=discord.ButtonStyle.danger)
-async def face_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-    await self.lock_in_choice(interaction, "Face")
-
 @bot.event
 async def on_ready():
-    print(f"Connecté en tant que {bot.user} (ID: {bot.user.id})")
+    print(f"{bot.user} est prêt !")
     try:
-        synced = await bot.tree.sync()
-        print(f"Commandes slash synchronisées ({len(synced)})")
+        await bot.tree.sync()
+        print("✅ Commandes synchronisées.")
     except Exception as e:
         print(f"Erreur lors de la synchronisation : {e}")
 
