@@ -56,6 +56,30 @@ class RejoindreView(discord.ui.View):
         await interaction.response.defer()
         original_message = await interaction.channel.fetch_message(self.message_id)
 
+        # On affiche un embed avec les choix des deux joueurs avant suspense
+        choix_joueur1_emoji = "🪙" if self.choix_joueur1 == "Pile" else "🧿"
+        choix_joueur2 = "Face" if self.choix_joueur1 == "Pile" else "Pile"
+        choix_joueur2_emoji = "🪙" if choix_joueur2 == "Pile" else "🧿"
+
+        embed_choix = discord.Embed(
+            title="🪙 Duel Pile ou Face démarré",
+            description=f"Montant : **{self.montant:,} kamas** 💰",
+            color=discord.Color.orange()
+        )
+        embed_choix.add_field(
+            name="👤 Joueur 1",
+            value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**",
+            inline=True
+        )
+        embed_choix.add_field(
+            name="👤 Joueur 2",
+            value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**",
+            inline=True
+        )
+        embed_choix.set_footer(text=f"📋 Duel lancé par {self.joueur1.display_name}")
+
+        await original_message.edit(embed=embed_choix, view=self)
+
         # Pause de 3 secondes avant de lancer le suspense
         await asyncio.sleep(3)
 
@@ -76,10 +100,6 @@ class RejoindreView(discord.ui.View):
         resultat = random.choice(["Pile", "Face"])
         resultat_emoji = "🪙" if resultat == "Pile" else "🧿"
 
-        choix_joueur2 = "Face" if self.choix_joueur1 == "Pile" else "Pile"
-        choix_joueur1_emoji = "🪙" if self.choix_joueur1 == "Pile" else "🧿"
-        choix_joueur2_emoji = "🪙" if choix_joueur2 == "Pile" else "🧿"
-
         gagnant = self.joueur1 if resultat == self.choix_joueur1 else joueur2
 
         result_embed = discord.Embed(
@@ -87,8 +107,16 @@ class RejoindreView(discord.ui.View):
             description=f"{resultat_emoji} Le résultat est : **{resultat}** !",
             color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
         )
-        result_embed.add_field(name="👤 Joueur 1", value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**", inline=True)
-        result_embed.add_field(name="👤 Joueur 2", value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**", inline=True)
+        result_embed.add_field(
+            name="👤 Joueur 1",
+            value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**",
+            inline=True
+        )
+        result_embed.add_field(
+            name="👤 Joueur 2",
+            value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**",
+            inline=True
+        )
         result_embed.add_field(name=" ", value="─" * 20, inline=False)
         result_embed.add_field(name="🏆 Gagnant", value=f"**{gagnant.mention}** remporte **{2 * self.montant:,} kamas** 💰", inline=False)
         result_embed.set_footer(text="🪙 Duel terminé • Bonne chance pour le prochain !")
