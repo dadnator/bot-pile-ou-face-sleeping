@@ -183,9 +183,6 @@ async def quit_duel(interaction: discord.Interaction):
         )
         return
 
-    # Debug print
-    print(f"Duels actifs : {duels}")
-
     duel_a_annuler = None
     for message_id, duel_data in duels.items():
         joueur1 = duel_data.get("joueur1")
@@ -199,6 +196,10 @@ async def quit_duel(interaction: discord.Interaction):
 
     duels.pop(duel_a_annuler)
 
+    # Répond immédiatement à l’interaction
+    await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
+
+    # Puis essaie d’éditer le message (sans réponse interaction)
     try:
         channel = interaction.channel
         message = await channel.fetch_message(duel_a_annuler)
@@ -209,8 +210,6 @@ async def quit_duel(interaction: discord.Interaction):
         await message.edit(embed=embed, view=None)
     except Exception as e:
         print(f"Erreur lors de l'édition du message d'annulation : {e}")
-
-    await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
 
 @bot.event
 async def on_ready():
