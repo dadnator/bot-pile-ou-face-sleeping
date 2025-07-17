@@ -178,12 +178,18 @@ async def sleeping(interaction: discord.Interaction, montant: int):
 @is_sleeping()
 async def quit_duel(interaction: discord.Interaction):
     if interaction.channel.name != "pile-ou-face-sleeping":
-        await interaction.response.send_message("❌ Tu dois utiliser cette commande dans le salon `#pile-ou-face-sleeping`.", ephemeral=True)
+        await interaction.response.send_message(
+            "❌ Tu dois utiliser cette commande dans le salon `#pile-ou-face-sleeping`.", ephemeral=True
+        )
         return
+
+    # Debug print
+    print(f"Duels actifs : {duels}")
 
     duel_a_annuler = None
     for message_id, duel_data in duels.items():
-        if duel_data["joueur1"].id == interaction.user.id:
+        joueur1 = duel_data.get("joueur1")
+        if joueur1 and joueur1.id == interaction.user.id:
             duel_a_annuler = message_id
             break
 
@@ -201,8 +207,8 @@ async def quit_duel(interaction: discord.Interaction):
         embed.title += " (Annulé)"
         embed.description = "⚠️ Ce duel a été annulé par son créateur."
         await message.edit(embed=embed, view=None)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Erreur lors de l'édition du message d'annulation : {e}")
 
     await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
 
