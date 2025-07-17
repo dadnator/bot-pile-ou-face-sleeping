@@ -222,12 +222,13 @@ async def quit_duel(interaction: discord.Interaction):
         await interaction.response.send_message("❌ Tu n'as aucun duel en attente à annuler.", ephemeral=True)
         return
 
+    # Retirer le duel avant de répondre
     duels.pop(duel_a_annuler)
 
-    # Répond immédiatement à l’interaction
+    # Répondre UNE SEULE fois à l'interaction
     await interaction.response.send_message("✅ Ton duel a bien été annulé.", ephemeral=True)
 
-    # Puis essaie d’éditer le message (sans réponse interaction)
+    # Puis éditer le message sans répondre à l'interaction (donc pas interaction.response)
     try:
         channel = interaction.channel
         message = await channel.fetch_message(duel_a_annuler)
@@ -238,6 +239,7 @@ async def quit_duel(interaction: discord.Interaction):
         await message.edit(embed=embed, view=None)
     except Exception as e:
         print(f"Erreur lors de l'édition du message d'annulation : {e}")
+
 
 @bot.event
 async def on_ready():
