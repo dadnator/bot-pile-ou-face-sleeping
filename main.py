@@ -100,16 +100,41 @@ class RejoindreView(discord.ui.View):
             gagnant = joueur2
 
         result_embed = discord.Embed(
-            title="🎲 Résultat du Duel Pile ou Face",
-            description=f"{resultat_emoji} Le résultat est : **{resultat}** !",
-            color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
-        )
-        result_embed.add_field(name="👤 Joueur 1", value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**", inline=True)
-        result_embed.add_field(name="👤 Joueur 2", value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**", inline=True)
-        # Champ avec des tirets pour créer une ligne de séparation
-        result_embed.add_field(name=" ", value="─" * 20, inline=False) # Utilise des tirets '─' (barre horizontale légère)
-        result_embed.add_field(name="🏆 Gagnant", value=f"**{gagnant.mention}** remporte **{2 * self.montant:,} kamas** 💰", inline=False)
-        result_embed.set_footer(text="🪙 Duel terminé • Bonne chance pour le prochain !")
+    title="🎲 Résultat du Duel Pile ou Face",
+    description=f"{resultat_emoji} Le résultat est : **{resultat}** !",
+    color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
+)
+
+# Joueur 1
+result_embed.add_field(
+    name="👤 Joueur 1",
+    value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**",
+    inline=True
+)
+
+# Joueur 2
+result_embed.add_field(
+    name="👤 Joueur 2",
+    value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**",
+    inline=True
+)
+
+# Montant misé
+result_embed.add_field(
+    name="💰 Montant misé",
+    value=f"**{self.montant:,} kamas** par joueur — Total : **{2 * self.montant:,} kamas**",
+    inline=False
+)
+
+# Gagnant (tout en gras)
+result_embed.add_field(
+    name="**🏆 Gagnant**",
+    value=f"**{gagnant.mention} remporte {2 * self.montant:,} kamas 💰**",
+    inline=False
+)
+
+result_embed.set_footer(text="🪙 Duel terminé • Bonne chance pour le prochain !")
+
 
         await original_message.edit(embed=result_embed, view=None)
         duels.pop(self.message_id, None)
