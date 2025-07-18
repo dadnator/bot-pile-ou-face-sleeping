@@ -118,6 +118,11 @@ class RejoindreView(discord.ui.View):
     value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**",
     inline=False
         )
+        result.add_field(
+    name=" ",
+    value="─" * 20,
+    inline=False
+        )
 
         # Montant misé
         result_embed.add_field(
