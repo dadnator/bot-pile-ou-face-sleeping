@@ -122,7 +122,7 @@ class RejoindreView(discord.ui.View):
         # Montant misé
         result_embed.add_field(
     name="💰 Montant misé",
-    value=f"**{self.montant:,} kamas** par joueur — Total : **{2 * self.montant:,} kamas**",
+    value=f"**{self.montant:,} kamas** par joueur ",
     inline=False
         )
 
