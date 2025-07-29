@@ -14,8 +14,8 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 duels = {}
 
 ROULETTE_NUM_IMAGES = {
-    "Pile": "https://i.imgur.com/sjRSPiT.png",
-    "Face": "https://i.imgur.com/sjRSPiT.png"
+    "Pile": "https://i.imgur.com/JKbZT3L.png",
+    "Face": "https://i.imgur.com/4ascC3Z.png"
 }
 
 # --- Check personnalisé pour rôle sleeping ---
