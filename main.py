@@ -13,6 +13,11 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 
 duels = {}
 
+ROULETTE_NUM_IMAGES = {
+    "Pile": "https://i.imgur.com/9jmROZi.png",
+    "Face": "https://i.imgur.com/iKPC131.png"
+}
+
 # --- Check personnalisé pour rôle sleeping ---
 def is_sleeping():
     async def predicate(interaction: discord.Interaction) -> bool:
@@ -99,11 +104,17 @@ class RejoindreView(discord.ui.View):
         else:
             gagnant = joueur2
 
-        result_embed = discord.Embed(
+result_embed = discord.Embed(
     title="🎲 Résultat du Duel Pile ou Face",
     description=f"{resultat_emoji} Le résultat est : **{resultat}** !",
     color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
-        )
+)
+
+# AJOUTE CETTE LIGNE POUR L'IMAGE DU NUMÉRO TIRÉ
+if resultat in ROULETTE_NUM_IMAGES:
+    result_embed.set_thumbnail(url=ROULETTE_NUM_IMAGES[resultat])
+
+
 
         # Joueur 1
         result_embed.add_field(
