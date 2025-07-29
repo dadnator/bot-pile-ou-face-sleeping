@@ -104,56 +104,55 @@ class RejoindreView(discord.ui.View):
         else:
             gagnant = joueur2
 
-result_embed = discord.Embed(
-    title="🎲 Résultat du Duel Pile ou Face",
-    description=f"{resultat_emoji} Le résultat est : **{resultat}** !",
-    color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
-)
+        result_embed = discord.Embed(
+            title="🎲 Résultat du Duel Pile ou Face",
+            description=f"{resultat_emoji} Le résultat est : **{resultat}** !",
+            color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
+        )
 
-# AJOUTE CETTE LIGNE POUR L'IMAGE DU NUMÉRO TIRÉ
-if resultat in ROULETTE_NUM_IMAGES:
-    result_embed.set_thumbnail(url=ROULETTE_NUM_IMAGES[resultat])
-
-
+        # ✅ Ajout de l'image en haut à droite selon le résultat
+        if resultat in ROULETTE_NUM_IMAGES:
+            result_embed.set_thumbnail(url=ROULETTE_NUM_IMAGES[resultat])
 
         # Joueur 1
         result_embed.add_field(
-    name="👤 Joueur 1",
-    value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**",
-    inline=True
+            name="👤 Joueur 1",
+            value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**",
+            inline=True
         )
 
         # Joueur 2
         result_embed.add_field(
-    name="👤 Joueur 2",
-    value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**",
-    inline=False
+            name="👤 Joueur 2",
+            value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**",
+            inline=False
         )
+
         result_embed.add_field(
-    name=" ",
-    value="─" * 20,
-    inline=False
+            name=" ",
+            value="─" * 20,
+            inline=False
         )
 
         # Montant misé
         result_embed.add_field(
-    name="💰 Montant misé",
-    value=f"**{self.montant:,} kamas** par joueur ",
-    inline=False
+            name="💰 Montant misé",
+            value=f"**{self.montant:,} kamas** par joueur ",
+            inline=False
         )
 
-        # Gagnant (tout en gras)
+        # Gagnant
         result_embed.add_field(
-    name="**🏆 Gagnant**",
-    value=f"**{gagnant.mention} remporte {2 * self.montant:,} kamas 💰**",
-    inline=False
+            name="**🏆 Gagnant**",
+            value=f"**{gagnant.mention} remporte {2 * self.montant:,} kamas 💰**",
+            inline=False
         )
 
         result_embed.set_footer(text="🪙 Duel terminé • Bonne chance pour le prochain !")
 
-
         await original_message.edit(embed=result_embed, view=None)
         duels.pop(self.message_id, None)
+
 
 class PariView(discord.ui.View):
     def __init__(self, interaction, montant):
