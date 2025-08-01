@@ -64,9 +64,11 @@ class RejoindreView(discord.ui.View):
         # Mettre à jour l'embed immédiatement après que le joueur 2 a rejoint
         player2_joined_embed = discord.Embed(
             title="🤝 Duel en attente de lancement...",
-            description=f"{self.joueur1.mention} (Choix: **{self.choix_joueur1}**) et {joueur2.mention} sont prêts ! "
-                        f"Montant: **{self.montant:,} kamas** 💰\n\n"
-                        f"Le pile ou face va commencer dans un instant...",
+            description=(
+                f"{self.joueur1.mention} (Choix: **{self.choix_joueur1}**) et {joueur2.mention} sont prêts ! "
+                f"Montant: **{self.montant:,}".replace(",", " ") + " kamas** 💰\n\n"
+                f"Le pile ou face va commencer dans un instant..."
+            )
             color=discord.Color.blue()
         )
         player2_joined_embed.set_footer(text="Préparation du tirage...")
@@ -137,14 +139,14 @@ class RejoindreView(discord.ui.View):
         # Montant misé
         result_embed.add_field(
             name="💰 Montant misé",
-            value=f"**{self.montant:,} kamas** par joueur ",
+            value=f"**{self.montant:,}".replace(",", " ") + " kamas** par joueur ",
             inline=False
         )
 
         # Gagnant
         result_embed.add_field(
             name="**🏆 Gagnant**",
-            value=f"**{gagnant.mention} remporte {2 * self.montant:,} kamas 💰**",
+            value=f"**{gagnant.mention} remporte {2 * self.montant:,}".replace(",", " ") + " kamas 💰**",
             inline=False
         )
 
@@ -170,7 +172,7 @@ class PariView(discord.ui.View):
 
         embed = discord.Embed(
             title="🪙 Nouveau Duel Pile ou Face",
-            description=f"{joueur1.mention} a choisi : **{choix} {choix_emoji}**\nMontant : **{self.montant:,} kamas** 💰",
+            description=f"{joueur1.mention} a choisi : **{choix} {choix_emoji}**\nMontant : **{self.montant:,}".replace(",", " ") + " kamas** 💰",
             color=discord.Color.orange()
         )
         embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention} - {choix}", inline=True)
@@ -231,7 +233,7 @@ async def sleeping(interaction: discord.Interaction, montant: int):
 
     embed = discord.Embed(
         title="🪙 Nouveau Duel Pile ou Face",
-        description=f"{interaction.user.mention} veut lancer un duel pour **{montant:,} kamas** 💰",
+        description=f"{interaction.user.mention} veut lancer un duel pour **{montant:,}".replace(",", " ") + " kamas** 💰",
         color=discord.Color.gold()
     )
     embed.add_field(name="Choix", value="Clique sur un bouton ci-dessous : Pile / Face", inline=False)
