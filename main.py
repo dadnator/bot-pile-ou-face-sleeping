@@ -267,8 +267,8 @@ class StatsView(discord.ui.View):
             rank = self.page * self.entries_per_page + i + 1
             description += (
                 f"**#{rank}** <@{user_id}> — "
-                f"💰 **Misés** : `{mises:,}` kamas | "
-                f"🏆 **Gagnés** : `{kamas_gagnes:,}` kamas | "
+                f"<:emoji_2:1399792098529509546> **Misés** : `{mises:,}` kamas | "
+                f"<:emoji_2:1399792098529509546> **Gagnés** : `{kamas_gagnes:,}` kamas | "
                 f"🎯 **Winrate** : `{winrate:.1f}%` (**{victoires}**/**{total_paris}**)\n"
             )
             if i < len(slice_entries) - 1:
