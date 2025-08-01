@@ -170,7 +170,7 @@ class RejoindreView(discord.ui.View):
 
         result_embed.set_footer(text="🪙 Duel terminé • Bonne chance pour le prochain !")
 
-                await original_message.edit(embed=result_embed, view=None)
+        await original_message.edit(embed=result_embed, view=None)
 
         # ✅ Enregistrement du duel dans la base
         now = datetime.utcnow()
