@@ -198,15 +198,16 @@ class PariView(discord.ui.View):
         self.interaction = interaction
         self.montant = montant
 
-   async def lock_in_choice(self, interaction, choix):
-    if interaction.user.id != self.interaction.user.id:
-        await interaction.response.send_message(
-            "❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True
-        )
-        return
+    async def lock_in_choice(self, interaction, choix):
+        if interaction.user.id != self.interaction.user.id:
+            await interaction.response.send_message(
+                "❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True
+            )
+            return
 
-    joueur1 = self.interaction.user
-    choix_emoji = "🪙" if choix == "Pile" else "🧿"
+        joueur1 = self.interaction.user
+        choix_emoji = "🪙" if choix == "Pile" else "🧿"
+
 
     # ✅ 1. Modifier le message éphémère (privé) avec confirmation
     embed_prive = discord.Embed(
