@@ -68,7 +68,7 @@ class RejoindreView(discord.ui.View):
                 f"{self.joueur1.mention} (Choix: **{self.choix_joueur1}**) et {joueur2.mention} sont prêts ! "
                 f"Montant: **{self.montant:,}".replace(",", " ") + " kamas** 💰\n\n"
                 f"Le pile ou face va commencer dans un instant..."
-            )
+            ),
             color=discord.Color.blue()
         )
         player2_joined_embed.set_footer(text="Préparation du tirage...")
