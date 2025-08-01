@@ -198,43 +198,66 @@ class PariView(discord.ui.View):
         self.interaction = interaction
         self.montant = montant
 
-    async def lock_in_choice(self, interaction, choix):
-        if interaction.user.id != self.interaction.user.id:
-            await interaction.response.send_message("❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True)
-            return
-
-        joueur1 = self.interaction.user
-        choix_emoji = "🪙" if choix == "Pile" else "🧿"
-
-        embed = discord.Embed(
-            title="🪙 Nouveau Duel Pile ou Face",
-            description=f"{joueur1.mention} a choisi : **{choix} {choix_emoji}**\nMontant : **{self.montant:,.0f}".replace(",", " ") + " kamas** 💰",
-            color=discord.Color.orange()
+   async def lock_in_choice(self, interaction, choix):
+    if interaction.user.id != self.interaction.user.id:
+        await interaction.response.send_message(
+            "❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True
         )
-        embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention} - {choix}", inline=True)
-        embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
-        embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name} - {choix}")
+        return
 
-        await interaction.response.edit_message(embed=embed, view=None)
+    joueur1 = self.interaction.user
+    choix_emoji = "🪙" if choix == "Pile" else "🧿"
 
-        rejoindre_view = RejoindreView(message_id=None, joueur1=joueur1, choix_joueur1=choix, montant=self.montant)
-        
-        # ✅ Mention du rôle "sleeping" dans le même message que l'embed
-        role = discord.utils.get(interaction.guild.roles, name="sleeping")
-        message = await interaction.channel.send(
-            content=f"{role.mention} — Un nouveau duel est prêt !",
-            embed=embed,
-            view=rejoindre_view,
-            allowed_mentions=discord.AllowedMentions(roles=True)
-        )
+    # ✅ 1. Modifier le message éphémère (privé) avec confirmation
+    embed_prive = discord.Embed(
+        title="✅ Choix enregistré",
+        description=(
+            f"Tu as choisi : **{choix} {choix_emoji}**\n"
+            f"Le duel est maintenant visible pour les autres joueurs."
+        ),
+        color=discord.Color.green()
+    )
+    await interaction.response.edit_message(embed=embed_prive, view=None)
 
-        rejoindre_view.message_id = message.id
+# Envoi du message public SEULEMENT maintenant que le choix est fait
+rejoindre_view = RejoindreView(
+    message_id=None,
+    joueur1=joueur1,
+    type_pari="pileouface",
+    valeur_choisie=choix,
+    montant=self.montant
+)
 
-        duels[message.id] = {
-            "joueur1": joueur1,
-            "montant": self.montant,
-            "choix": choix
-        }
+embed_public = discord.Embed(
+    title="🎯 Duel Pile ou Face lancé",
+    description=(
+        f"{joueur1.mention} a lancé un duel pour **{self.montant:,}** kamas 💰\n"
+        f"Il a choisi : **{choix} {choix_emoji}**\n"
+        f"Un autre joueur ose-t-il relever le défi ?"
+    ),
+    color=discord.Color.gold()
+)
+embed_public.add_field(name="👤 Joueur 1", value=f"{joueur1.mention} - {choix}", inline=True)
+embed_public.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
+
+role = discord.utils.get(interaction.guild.roles, name="sleeping")
+message = await interaction.channel.send(
+    content=f"{role.mention} — Un nouveau duel est disponible !",
+    embed=embed_public,
+    view=rejoindre_view,
+    allowed_mentions=discord.AllowedMentions(roles=True)
+)
+
+rejoindre_view.message_id = message.id
+
+duels[message.id] = {
+    "joueur1": joueur1,
+    "montant": self.montant,
+    "choix": choix
+}
+
+
+
 
     @discord.ui.button(label="Pile 🪙", style=discord.ButtonStyle.primary)
     async def pile(self, interaction: discord.Interaction, button: discord.ui.Button):
