@@ -386,7 +386,7 @@ async def sleeping(interaction: discord.Interaction, montant: int):
     # Ici tu peux soit répondre directement, soit defer et followup
     # Mais pas les deux à la fois et surtout pas après un send_message déjà appelé
 
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions(roles=True)
 
 
 @bot.tree.command(name="quit", description="Annule le duel en cours que tu as lancé.")
