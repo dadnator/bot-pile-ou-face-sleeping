@@ -410,6 +410,14 @@ async def quit_duel(interaction: discord.Interaction):
 
     await interaction.followup.send("✅ Ton duel a bien été annulé.", ephemeral=True)
 
+@bot.event
+async def on_ready():
+    print(f"{bot.user} est prêt !")
+    try:
+        await bot.tree.sync()
+        print("✅ Commandes synchronisées.")
+    except Exception as e:
+        print(f"Erreur : {e}")
 
 keep_alive()
 bot.run(token)
