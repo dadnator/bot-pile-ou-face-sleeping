@@ -336,6 +336,70 @@ async def statsall(interaction: discord.Interaction):
     view = StatsView(interaction, stats)
     await interaction.response.send_message(embed=view.get_embed(), view=view)
 
+# --- Commande /mystats : stats personnelles ---
+@bot.tree.command(name="mystats", description="Affiche tes statistiques de roulette personnelles.")
+@is_sleeping()
+async def mystats(interaction: discord.Interaction):
+    # Récupère l'ID de l'utilisateur qui a lancé la commande
+    user_id = interaction.user.id
+
+    # Exécute une requête SQL pour obtenir les stats de l'utilisateur
+    c.execute("""
+    SELECT joueur_id,
+           SUM(montant) as total_mise,
+           SUM(CASE WHEN gagnant_id = joueur_id THEN montant * 2 ELSE 0 END) as kamas_gagnes,
+           SUM(CASE WHEN gagnant_id = joueur_id THEN 1 ELSE 0 END) as victoires,
+           COUNT(*) as total_paris
+    FROM (
+        SELECT joueur1_id as joueur_id, montant, gagnant_id FROM paris
+        UNION ALL
+        SELECT joueur2_id as joueur_id, montant, gagnant_id FROM paris
+    )
+    WHERE joueur_id = ?
+    GROUP BY joueur_id
+    """, (user_id,))
+    
+    # Récupère le résultat de la requête
+    stats_data = c.fetchone()
+
+    # Si aucune donnée n'est trouvée pour l'utilisateur
+    if not stats_data:
+        embed = discord.Embed(
+            title="📊 Tes Statistiques Roulette",
+            description="❌ Tu n'as pas encore participé à un duel. Joue ton premier duel pour voir tes stats !",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    # Extrait les données de la requête
+    _, mises, kamas_gagnes, victoires, total_paris = stats_data
+    winrate = (victoires / total_paris * 100) if total_paris > 0 else 0.0
+
+    # Crée un embed pour afficher les statistiques
+    embed = discord.Embed(
+        title=f"📊 Statistiques de {interaction.user.display_name}",
+        description="Voici un résumé de tes performances à la roulette.",
+        color=discord.Color.gold()
+    )
+
+    # Ajoute les champs avec les statistiques
+    embed.add_field(name="Total misé", value=f"**{mises:,.0f}".replace(",", " ") + " kamas**", inline=False)
+    embed.add_field(name=" ", value="─" * 3, inline=False)
+    embed.add_field(name="Total gagné", value=f"**{kamas_gagnes:,.0f}".replace(",", " ") + " kamas**", inline=False)
+    embed.add_field(name=" ", value="─" * 20, inline=False)
+    embed.add_field(name="Duels joués", value=f"**{total_paris}**", inline=True)
+    embed.add_field(name=" ", value="─" * 3, inline=False)
+    embed.add_field(name="Victoires", value=f"**{victoires}**", inline=True)
+    embed.add_field(name=" ", value="─" * 3, inline=False)
+    embed.add_field(name="Taux de victoire", value=f"**{winrate:.1f}%**", inline=False)
+
+    embed.set_thumbnail(url=interaction.user.avatar.url if interaction.user.avatar else None)
+    embed.set_footer(text="Bonne chance pour tes prochains duels !")
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 
 @bot.tree.command(name="sleeping", description="Lancer un duel pile ou face avec un montant.")
 @is_sleeping()
