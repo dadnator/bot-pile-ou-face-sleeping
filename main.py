@@ -17,8 +17,8 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 duels = {}
 
 ROULETTE_NUM_IMAGES = {
-    "Pile": "https://i.imgur.com/JKbZT3L.png",
-    "Face": "https://i.imgur.com/4ascC3Z.png"
+    "Pile": "https://i.imgur.com/BgXd5d5.png",
+    "Face": "https://i.imgur.com/uA4x6GT.png"
 }
 
 # Connexion à la base de données pour les stats
