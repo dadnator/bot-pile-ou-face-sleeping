@@ -307,6 +307,14 @@ class StatsView(discord.ui.View):
 @bot.tree.command(name="statsall", description="Affiche les statistiques de tous les duels pile ou face.")
 @is_sleeping()
 async def statsall(interaction: discord.Interaction):
+    # Vérifiez si la commande est utilisée dans le bon salon.
+    if not isinstance(interaction.channel, discord.TextChannel) or interaction.channel.name != "pile-ou-face-sleeping":
+        await interaction.response.send_message(
+            "❌ Cette commande ne peut être utilisée que dans le salon #pile-ou-face-sleeping.", 
+            ephemeral=True
+        )
+        return
+
     c.execute("""
     SELECT joueur_id,
            SUM(montant) as total_mise,
