@@ -6,7 +6,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-  return "le bot est en ligne roulettesleeping !"
+  return "le bot est en ligne pile ou face sleeping !"
 
 
 def run():
