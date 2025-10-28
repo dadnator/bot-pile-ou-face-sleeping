@@ -3,493 +3,330 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from keep_alive import keep_alive
-import random
-import asyncio
 import sqlite3
-from datetime import datetime
+import re
+import asyncio
 
-
+# --- CONFIGURATION & CONSTANTES ---
 token = os.environ['TOKEN_BOT_DISCORD']
 
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="/", intents=intents)
-
-duels = {}
-
-ROULETTE_NUM_IMAGES = {
-    "Pile": "https://i.imgur.com/BgXd5d5.png",
-    "Face": "https://i.imgur.com/uA4x6GT.png"
+# ID du salon de log de la roulette
+ID_SALON_LOG_COMMISSION = 1366384335615164529
+# ID du bot de roulette (À REMPLACER par l'ID copié !)
+ID_BOTS_DE_JEU = {
+    1394959403144314940, # Ancien ID_BOT_ROULETTE
+    1234567890123456789, # NOUVEAU Bot de jeu 1
+    9876543210987654321  # NOUVEAU Bot de jeu 2
 }
 
-# Connexion à la base de données pour les stats
-conn = sqlite3.connect("pile_face_stats.db")
-c = conn.cursor()
-c.execute("""
-CREATE TABLE IF NOT EXISTS paris (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    joueur1_id INTEGER NOT NULL,
-    joueur2_id INTEGER NOT NULL,
-    montant INTEGER NOT NULL,
-    gagnant_id INTEGER NOT NULL,
-    date TIMESTAMP NOT NULL
+ID_HUMAINS_AUTORISES = {
+    114811427377774600, # ID Utilisateur 1
+    9876543210987654320, # ID Utilisateur 2
+}
+# ID du rôle des Croupiers (À REMPLACER)
+ID_ROLE_CROUPIER = 1406210029815861258 # <<<<< REMPLACEZ CECI PAR L'ID DU RÔLE CROUPIER >>>>>
+if ID_ROLE_CROUPIER == 0:
+    print("⚠️ ATTENTION : L'ID du rôle croupier (ID_ROLE_CROUPIER) doit être défini.")
+
+
+# --- BASE DE DONNÉES (SQLite) ---
+DB_NAME = "leaderboard_mises.db"
+
+# Fonction thread-safe pour l'initialisation de la DB
+def setup_db():
+    """Crée la table de mises si elle n'existe pas."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS total_mises (
+        user_id INTEGER PRIMARY KEY,
+        mises_cumulees INTEGER NOT NULL DEFAULT 0
+    )
+    """)
+    conn.commit()
+    conn.close()
+
+# Appel de la fonction de configuration au démarrage
+setup_db()
+
+
+# --- INITIALISATION DU BOT ---
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Regex pour analyser le message de log et extraire Joueurs et Mise
+# Utilisation de \s+ au lieu de ' ' pour correspondre à n'importe quel espace (y compris les espaces insécables)
+LOG_REGEX = re.compile(
+    # NOTE: J'utilise \s* pour correspondre à zéro ou plusieurs espaces/tabulations
+    r'\|\s*Duel\s*:\s*'
+    # Capture du Joueur 1 (Groupe 1) : mention Discord
+    r'(<@!?\d+>)\s*vs\s*'
+    # Capture du Joueur 2 (Groupe 2) : mention Discord
+    r'(<@!?\d+>)\s*'
+    # Capture de la Mise (Groupe 3) : permet n'importe quel type de séparation numérique
+    # J'utilise [ \s]+ pour capturer les chiffres séparés par n'importe quel espace
+    r'\(Mise\s*:\s*([\d\s]+)\s*kamas\s*par\s*joueur\)'
 )
-""")
-conn.commit()
 
-# --- Check personnalisé pour rôle sleeping ---
-def is_sleeping():
-    async def predicate(interaction: discord.Interaction) -> bool:
-        role = discord.utils.get(interaction.guild.roles, name="sleeping")
-        return role in interaction.user.roles
-    return app_commands.check(predicate)
+def extract_id(mention):
+    match = re.search(r'<@!?(\d+)>', mention)
+    return int(match.group(1)) if match else None
 
-class RejoindreView(discord.ui.View):
-    def __init__(self, message_id, joueur1, choix_joueur1, montant):
+# --- FONCTIONS THREAD-SAFE CORRIGÉES POUR LA BASE DE DONNÉES ---
+
+def _update_single_user_mises(c, user_id: int, montant: int):
+    """
+    Met à jour la mise pour un seul utilisateur en utilisant un curseur existant.
+    CORRIGE l'IntegrityError en utilisant UPDATE or INSERT.
+    """
+    # 1. Tenter la mise à jour (si l'utilisateur existe)
+    c.execute("UPDATE total_mises SET mises_cumulees = mises_cumulees + ? WHERE user_id = ?", (montant, user_id))
+
+    # 2. Si aucune ligne n'a été modifiée (l'utilisateur n'existe pas), faire un INSERT
+    if c.rowcount == 0:
+        c.execute("INSERT INTO total_mises (user_id, mises_cumulees) VALUES (?, ?)", (user_id, montant))
+
+def process_duel_mises(player1_id: int, player2_id: int, mise_amount: int):
+    """
+    Traite les deux mises dans une seule transaction DB (CORRIGE l'erreur 'database is locked').
+    """
+    conn = sqlite3.connect(DB_NAME) 
+    c = conn.cursor()
+
+    # Mise à jour des deux joueurs dans la même connexion
+    _update_single_user_mises(c, player1_id, mise_amount)
+    _update_single_user_mises(c, player2_id, mise_amount)
+
+    conn.commit()
+    conn.close()
+
+def get_leaderboard_data():
+    """Récupère toutes les données du classement de manière thread-safe."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT user_id, mises_cumulees
+        FROM total_mises
+        ORDER BY mises_cumulees DESC
+    """)
+    all_players = c.fetchall()
+
+    conn.close()
+    return all_players
+
+
+# --- CLASSE DE VUE POUR LA PAGINATION (Inchangée) ---
+
+class TopMisesView(discord.ui.View):
+    def __init__(self, entries):
         super().__init__(timeout=None)
-        self.message_id = message_id
-        self.joueur1 = joueur1
-        self.choix_joueur1 = choix_joueur1
-        self.montant = montant
-
-    @discord.ui.button(label="🎯 Rejoindre le duel", style=discord.ButtonStyle.green)
-    async def rejoindre(self, interaction: discord.Interaction, button: discord.ui.Button):
-        joueur2 = interaction.user
-
-        if joueur2.id == self.joueur1.id:
-            await interaction.response.send_message("❌ Tu ne peux pas rejoindre ton propre duel.", ephemeral=True)
-            return
-
-        duel_data = duels.get(self.message_id)
-        if duel_data is None:
-            await interaction.response.send_message("❌ Ce duel n'existe plus ou a déjà été joué.", ephemeral=True)
-            return
-
-        for data in duels.values():
-            if data["joueur1"].id == joueur2.id or (
-                "joueur2" in data and data["joueur2"] and data["joueur2"].id == joueur2.id
-            ):
-                await interaction.response.send_message(
-                    "❌ Tu participes déjà à un autre duel. Termine-le avant d’en rejoindre un autre.",
-                    ephemeral=True
-                )
-                return
-
-        duel_data["joueur2"] = joueur2
-        self.rejoindre.disabled = True
-        await interaction.response.defer()
-        original_message = await interaction.channel.fetch_message(self.message_id)
-
-        # Mettre à jour l'embed immédiatement après que le joueur 2 a rejoint
-        player2_joined_embed = discord.Embed(
-            title="🤝 Duel en attente de lancement...",
-            description=(
-                f"{self.joueur1.mention} (Choix: **{self.choix_joueur1}**) et {joueur2.mention} sont prêts ! "
-                f"Montant: **{self.montant:,}".replace(",", " ") + " kamas** 💰\n\n"
-                f"Le pile ou face va commencer dans un instant..."
-            ),
-            color=discord.Color.blue()
-        )
-        player2_joined_embed.set_footer(text="Préparation du tirage...")
-        await original_message.edit(embed=player2_joined_embed, view=None)
-
-        # Ajouter un délai de 3 secondes ici
-        await asyncio.sleep(5)
-
-        suspense_embed = discord.Embed(
-            title="🪙 Le pile ou face est en cours...",
-            description="On croise les doigts 🤞🏻 !",
-            color=discord.Color.greyple()
-        )
-        suspense_embed.set_image(url="https://www.cliqueduplateau.com/wordpress/wp-content/uploads/2015/12/flip.gif")  # Gif suspense
-
-        await original_message.edit(embed=suspense_embed, view=None)
-
-        for i in range(10, 0, -1):
-            await asyncio.sleep(1)
-            # Uniquement l'emoji pile 🪙 durant le suspense
-            suspense_embed.title = f"🪙  Tirage en cours ..."
-            await original_message.edit(embed=suspense_embed)
-
-        resultat = random.choice(["Pile", "Face"])
-        resultat_emoji = "🪙" if resultat == "Pile" else "🧿"
-
-        # Déterminer gagnant
-        choix_joueur2 = "Face" if self.choix_joueur1 == "Pile" else "Pile"
-        choix_joueur1_emoji = "🪙" if self.choix_joueur1 == "Pile" else "🧿"
-        choix_joueur2_emoji = "🪙" if choix_joueur2 == "Pile" else "🧿"
-
-        gagnant = None
-        if resultat == self.choix_joueur1:
-            gagnant = self.joueur1
-        else:
-            gagnant = joueur2
-
-        result_embed = discord.Embed(
-            title="🎲 Résultat du Duel Pile ou Face",
-            description=f"{resultat_emoji} Le résultat est : **{resultat}** !",
-            color=discord.Color.green() if gagnant == joueur2 else discord.Color.red()
-        )
-
-        # ✅ Ajout de l'image en haut à droite selon le résultat
-        if resultat in ROULETTE_NUM_IMAGES:
-            result_embed.set_thumbnail(url=ROULETTE_NUM_IMAGES[resultat])
-
-        # Joueur 1
-        result_embed.add_field(
-            name="👤 Joueur 1",
-            value=f"{self.joueur1.mention}\nChoix : **{self.choix_joueur1} {choix_joueur1_emoji}**",
-            inline=True
-        )
-
-        # Joueur 2
-        result_embed.add_field(
-            name="👤 Joueur 2",
-            value=f"{joueur2.mention}\nChoix : **{choix_joueur2} {choix_joueur2_emoji}**",
-            inline=False
-        )
-
-        result_embed.add_field(
-            name=" ",
-            value="─" * 20,
-            inline=False
-        )
-
-        # Montant misé
-        result_embed.add_field(
-            name="💰 Montant misé",
-            value=f"**{self.montant:,}".replace(",", " ") + " kamas** par joueur ",
-            inline=False
-        )
-
-        # Gagnant
-        result_embed.add_field(
-            name="**🏆 Gagnant**",
-            value=f"**{gagnant.mention} remporte {2 * self.montant:,}".replace(",", " ") + " kamas 💰**",
-            inline=False
-        )
-
-        result_embed.set_footer(text="🪙 Duel terminé • Bonne chance pour le prochain !")
-
-        await original_message.edit(embed=result_embed, view=None)
-
-        # ✅ Enregistrement du duel dans la base
-        now = datetime.utcnow()
-        try:
-            c.execute("INSERT INTO paris (joueur1_id, joueur2_id, montant, gagnant_id, date) VALUES (?, ?, ?, ?, ?)",
-                      (self.joueur1.id, joueur2.id, self.montant, gagnant.id, now))
-            conn.commit()
-        except Exception as e:
-            print("Erreur insertion base:", e)
-
-        duels.pop(self.message_id, None)
-
-
-class PariView(discord.ui.View):
-    def __init__(self, interaction, montant):
-        super().__init__(timeout=None)
-        self.interaction = interaction
-        self.montant = montant
-
-    async def lock_in_choice(self, interaction, choix):
-        if interaction.user.id != self.interaction.user.id:
-            await interaction.response.send_message("❌ Seul le joueur qui a lancé le duel peut choisir.", ephemeral=True)
-            return
-
-        joueur1 = self.interaction.user
-        choix_emoji = "🪙" if choix == "Pile" else "🧿"
-
-        embed = discord.Embed(
-            title="🪙 Nouveau Duel Pile ou Face",
-            description=f"{joueur1.mention} a choisi : **{choix} {choix_emoji}**\nMontant : **{self.montant:,}".replace(",", " ") + " kamas** 💰",
-            color=discord.Color.orange()
-        )
-        embed.add_field(name="👤 Joueur 1", value=f"{joueur1.mention} - {choix}", inline=True)
-        embed.add_field(name="👤 Joueur 2", value="🕓 En attente...", inline=True)
-        embed.set_footer(text=f"📋 Pari pris : {joueur1.display_name} - {choix}")
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-        rejoindre_view = RejoindreView(message_id=None, joueur1=joueur1, choix_joueur1=choix, montant=self.montant)
-        
-        # ✅ Mention du rôle "sleeping" dans le même message que l'embed
-        role = discord.utils.get(interaction.guild.roles, name="sleeping")
-        message = await interaction.channel.send(
-            content=f"{role.mention} — Un nouveau duel est prêt !",
-            embed=embed,
-            view=rejoindre_view,
-            allowed_mentions=discord.AllowedMentions(roles=True)
-        )
-
-        rejoindre_view.message_id = message.id
-
-        duels[message.id] = {
-            "joueur1": joueur1,
-            "montant": self.montant,
-            "choix": choix
-        }
-
-    @discord.ui.button(label="Pile 🪙", style=discord.ButtonStyle.primary)
-    async def pile(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.lock_in_choice(interaction, "Pile")
-
-    @discord.ui.button(label="Face 🧿", style=discord.ButtonStyle.secondary)
-    async def face(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.lock_in_choice(interaction, "Face")
-
-class StatsView(discord.ui.View):
-    def __init__(self, ctx, entries, page=0):
-        super().__init__(timeout=120)
-        self.ctx = ctx
         self.entries = entries
-        self.page = page
+        self.page = 0
         self.entries_per_page = 10
-        self.max_page = (len(entries) - 1) // self.entries_per_page
+        total_entries = len(entries)
+        # Calcule la dernière page possible (max_page est l'index de la dernière page)
+        self.max_page = (total_entries - 1) // self.entries_per_page if total_entries > 0 else 0
         self.update_buttons()
 
     def update_buttons(self):
-        self.first_page.disabled = self.page == 0
-        self.prev_page.disabled = self.page == 0
-        self.next_page.disabled = self.page == self.max_page
-        self.last_page.disabled = self.page == self.max_page
+        """Désactive les boutons quand on atteint les limites du classement."""
+        if self.max_page > 0:
+            # Boutons 'Début' (0) et 'Précédent' (1)
+            is_first_page = self.page == 0
+            self.children[0].disabled = is_first_page
+            self.children[1].disabled = is_first_page
+            
+            # Boutons 'Suivant' (2) et 'Fin' (3)
+            is_last_page = self.page == self.max_page
+            self.children[2].disabled = is_last_page
+            self.children[3].disabled = is_last_page
+        else:
+            # Si une seule page ou aucun joueur, tout désactiver
+            for button in self.children:
+                button.disabled = True
 
     def get_embed(self):
-        embed = discord.Embed(title="📊 Statistiques Pile ou Face", color=discord.Color.gold())
+        """Génère l'Embed pour la page actuelle."""
         start = self.page * self.entries_per_page
         end = start + self.entries_per_page
         slice_entries = self.entries[start:end]
 
+        embed = discord.Embed(
+            title="👑 Leaderboard des Mises Cumulées 💰",
+            description="Classement des joueurs avec le plus de Kamas misés.",
+            color=discord.Color.blue()
+        )
+
         if not slice_entries:
-            embed.description = "Aucune donnée à afficher."
+            embed.description = "Aucune donnée à afficher sur cette page."
+            embed.set_footer(text=f"Page {self.page + 1}/{self.max_page + 1}")
             return embed
 
-        description = ""
-        for i, (user_id, mises, kamas_gagnes, victoires, winrate, total_paris) in enumerate(slice_entries):
-            rank = self.page * self.entries_per_page + i + 1
-            description += (
-                f"**#{rank}** <@{user_id}> — "
-                f"<:emoji_2:1399792098529509546> **Misés** : `{mises:,}` kamas | "
-                f"<:emoji_2:1399792098529509546> **Gagnés** : `{kamas_gagnes:,}` kamas | "
-                f"🎯 **Winrate** : `{winrate:.1f}%` (**{victoires}**/**{total_paris}**)\n"
-            )
-            if i < len(slice_entries) - 1:
-                description += "─" * 20 + "\n"
+        rank_messages = []
+        for i, (user_id, total_mises) in enumerate(slice_entries):
+            rank = start + i + 1
+            # Formatage des nombres avec espaces insécables (ex: 1 234 567)
+            formatted_mises = f"{total_mises:,}".replace(",", "\u202F") 
 
-        embed.description = description
-        embed.set_footer(text=f"Page {self.page + 1}/{self.max_page + 1}")
+            rank_messages.append(
+                f"**#{rank}** <@{user_id}> : **{formatted_mises}** Kamas"
+            )
+
+        embed.description += "\n\n" + "\n".join(rank_messages)
+        embed.set_footer(text=f"Page {self.page + 1}/{self.max_page + 1} | Total de {len(self.entries)} joueurs classés.")
         return embed
 
-    @discord.ui.button(label="⏮️", style=discord.ButtonStyle.secondary)
-    async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.page = 0
+    async def _update_and_respond(self, interaction: discord.Interaction):
+        """Met à jour l'état de la vue et répond à l'interaction."""
         self.update_buttons()
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
-    @discord.ui.button(label="◀️", style=discord.ButtonStyle.secondary)
+    # --- Boutons de Navigation ---
+
+    @discord.ui.button(label="⏮️ Début", style=discord.ButtonStyle.secondary)
+    async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.page != 0:
+            self.page = 0
+            await self._update_and_respond(interaction)
+        else:
+            # Répondre silencieusement si aucune action n'est nécessaire
+            await interaction.response.defer()
+
+    @discord.ui.button(label="◀️ Précédent", style=discord.ButtonStyle.secondary)
     async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.page > 0:
             self.page -= 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+            await self._update_and_respond(interaction)
+        else:
+            await interaction.response.defer()
 
-    @discord.ui.button(label="▶️", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Suivant ▶️", style=discord.ButtonStyle.secondary)
     async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.page < self.max_page:
             self.page += 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+            await self._update_and_respond(interaction)
+        else:
+            await interaction.response.defer()
 
-    @discord.ui.button(label="⏭️", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Fin ⏭️", style=discord.ButtonStyle.secondary)
     async def last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.page = self.max_page
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+        if self.page != self.max_page:
+            self.page = self.max_page
+            await self._update_and_respond(interaction)
+        else:
+            await interaction.response.defer()
 
-@bot.tree.command(name="statsall", description="Affiche les statistiques de tous les duels pile ou face.")
-@is_sleeping()
-async def statsall(interaction: discord.Interaction):
-    # Vérifiez si la commande est utilisée dans le bon salon.
-    if not isinstance(interaction.channel, discord.TextChannel) or interaction.channel.name != "pile-ou-face-sleeping":
-        await interaction.response.send_message(
-            "❌ Cette commande ne peut être utilisée que dans le salon #pile-ou-face-sleeping.", 
-            ephemeral=True
-        )
-        return
 
-    c.execute("""
-    SELECT joueur_id,
-           SUM(montant) as total_mise,
-           SUM(CASE WHEN gagnant_id = joueur_id THEN montant * 2 ELSE 0 END) as kamas_gagnes,
-           SUM(CASE WHEN gagnant_id = joueur_id THEN 1 ELSE 0 END) as victoires,
-           COUNT(*) as total_paris
-    FROM (
-        SELECT joueur1_id as joueur_id, montant, gagnant_id FROM paris
-        UNION ALL
-        SELECT joueur2_id as joueur_id, montant, gagnant_id FROM paris
-    )
-    GROUP BY joueur_id
-    """)
-    data = c.fetchall()
+# --- FONCTION COMMUNE DE LOGIQUE DU LEADERBOARD ASYNCHRONE (Inchangée) ---
 
-    stats = []
-    for user_id, mises, kamas_gagnes, victoires, total_paris in data:
-        winrate = (victoires / total_paris * 100) if total_paris > 0 else 0.0
-        stats.append((user_id, mises, kamas_gagnes, victoires, winrate, total_paris))
+async def get_and_display_leaderboard(interaction: discord.Interaction, is_ephemeral: bool):
+    """Gère la récupération des données thread-safe et l'affichage paginé."""
 
-    stats.sort(key=lambda x: x[2], reverse=True)
+    await interaction.response.defer(ephemeral=is_ephemeral, thinking=True)
 
-    if not stats:
-        await interaction.response.send_message("Aucune donnée statistique disponible.", ephemeral=True)
-        return
-
-    view = StatsView(interaction, stats)
-    await interaction.response.send_message(embed=view.get_embed(), view=view)
-
-# --- Commande /mystats : stats personnelles ---
-@bot.tree.command(name="mystats", description="Affiche tes statistiques de roulette personnelles.")
-@is_sleeping()
-async def mystats(interaction: discord.Interaction):
-    # Récupère l'ID de l'utilisateur qui a lancé la commande
-    user_id = interaction.user.id
-
-    # Exécute une requête SQL pour obtenir les stats de l'utilisateur
-    c.execute("""
-    SELECT joueur_id,
-           SUM(montant) as total_mise,
-           SUM(CASE WHEN gagnant_id = joueur_id THEN montant * 2 ELSE 0 END) as kamas_gagnes,
-           SUM(CASE WHEN gagnant_id = joueur_id THEN 1 ELSE 0 END) as victoires,
-           COUNT(*) as total_paris
-    FROM (
-        SELECT joueur1_id as joueur_id, montant, gagnant_id FROM paris
-        UNION ALL
-        SELECT joueur2_id as joueur_id, montant, gagnant_id FROM paris
-    )
-    WHERE joueur_id = ?
-    GROUP BY joueur_id
-    """, (user_id,))
-    
-    # Récupère le résultat de la requête
-    stats_data = c.fetchone()
-
-    # Si aucune donnée n'est trouvée pour l'utilisateur
-    if not stats_data:
-        embed = discord.Embed(
-            title="📊 Tes Statistiques Roulette",
-            description="❌ Tu n'as pas encore participé à un duel. Joue ton premier duel pour voir tes stats !",
-            color=discord.Color.red()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    # Extrait les données de la requête
-    _, mises, kamas_gagnes, victoires, total_paris = stats_data
-    winrate = (victoires / total_paris * 100) if total_paris > 0 else 0.0
-
-    # Crée un embed pour afficher les statistiques
-    embed = discord.Embed(
-        title=f"📊 Statistiques de {interaction.user.display_name}",
-        description="Voici un résumé de tes performances à la roulette.",
-        color=discord.Color.gold()
+    all_players = await bot.loop.run_in_executor(
+        None, 
+        get_leaderboard_data
     )
 
-    # Ajoute les champs avec les statistiques
-    embed.add_field(name="Total misé", value=f"**{mises:,.0f}".replace(",", " ") + " kamas**", inline=False)
-    embed.add_field(name=" ", value="─" * 3, inline=False)
-    embed.add_field(name="Total gagné", value=f"**{kamas_gagnes:,.0f}".replace(",", " ") + " kamas**", inline=False)
-    embed.add_field(name=" ", value="─" * 20, inline=False)
-    embed.add_field(name="Duels joués", value=f"**{total_paris}**", inline=True)
-    embed.add_field(name=" ", value="─" * 3, inline=False)
-    embed.add_field(name="Victoires", value=f"**{victoires}**", inline=True)
-    embed.add_field(name=" ", value="─" * 3, inline=False)
-    embed.add_field(name="Taux de victoire", value=f"**{winrate:.1f}%**", inline=False)
-
-    embed.set_thumbnail(url=interaction.user.avatar.url if interaction.user.avatar else None)
-    embed.set_footer(text="Bonne chance pour tes prochains duels !")
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-
-@bot.tree.command(name="sleeping", description="Lancer un duel pile ou face avec un montant.")
-@is_sleeping()
-@app_commands.describe(montant="Montant misé en kamas")
-async def sleeping(interaction: discord.Interaction, montant: int):
-    if interaction.channel.name != "pile-ou-face-sleeping":
-        await interaction.response.send_message("❌ Tu dois utiliser cette commande dans le salon `#pile-ou-face-sleeping`.", ephemeral=True)
+    if not all_players:
+        await interaction.followup.send("❌ Aucune mise enregistrée pour l'instant dans le leaderboard.", ephemeral=is_ephemeral)
         return
 
-    if montant <= 0:
-        await interaction.response.send_message("❌ Le montant doit être supérieur à 0.", ephemeral=True)
-        return
-
-    for duel_data in duels.values():
-        if duel_data["joueur1"].id == interaction.user.id or (
-            "joueur2" in duel_data and duel_data["joueur2"] and duel_data["joueur2"].id == interaction.user.id
-        ):
-            await interaction.response.send_message(
-                "❌ Tu participes déjà à un autre duel. Termine-le ou utilise `/quit` pour l'annuler.",
-                ephemeral=True
-            )
-            return
-
-    embed = discord.Embed(
-        title="🪙 Nouveau Duel Pile ou Face",
-        description=f"{interaction.user.mention} veut lancer un duel pour **{montant:,}".replace(",", " ") + " kamas** 💰",
-        color=discord.Color.gold()
-    )
-    embed.add_field(name="Choix", value="Clique sur un bouton ci-dessous : Pile / Face", inline=False)
-
-    view = PariView(interaction, montant)
-
-    # Ici tu peux soit répondre directement, soit defer et followup
-    # Mais pas les deux à la fois et surtout pas après un send_message déjà appelé
-
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    view = TopMisesView(all_players)
+    await interaction.followup.send(embed=view.get_embed(), view=view, ephemeral=is_ephemeral)
 
 
-@bot.tree.command(name="quit", description="Annule le duel en cours que tu as lancé.")
-@is_sleeping()
-async def quit_duel(interaction: discord.Interaction):
-    if interaction.channel.name != "pile-ou-face-sleeping":
-        await interaction.response.send_message("❌ Tu dois utiliser cette commande dans le salon `#pile-ou-face-sleeping`.", ephemeral=True)
-        return
+# --- COMMANDES SLASH (Inchangées) ---
 
-    duel_a_annuler = None
-    for message_id, duel_data in duels.items():
-        if duel_data["joueur1"].id == interaction.user.id:
-            duel_a_annuler = message_id
-            break
+@bot.tree.command(name="leaderboard", description="Affiche votre classement privé des mises cumulées.")
+async def leaderboard_public(interaction: discord.Interaction):
+    await get_and_display_leaderboard(interaction, is_ephemeral=True)
 
-    if duel_a_annuler is None:
-        await interaction.response.send_message("❌ Tu n'as aucun duel en attente à annuler.", ephemeral=True)
-        return
+@bot.tree.command(name="leaderboardcroup", description="Affiche le classement publiquement (Réservé aux Croupiers).")
+@app_commands.checks.has_role(ID_ROLE_CROUPIER) 
+async def leaderboardcroup(interaction: discord.Interaction):
+    await get_and_display_leaderboard(interaction, is_ephemeral=False)
 
-    # ✅ On répond tout de suite pour éviter les erreurs
-    await interaction.response.defer(ephemeral=True)
+@leaderboardcroup.error
+async def leaderboardcroup_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingRole):
+        await interaction.response.send_message("❌ Vous n'êtes pas autorisé à utiliser cette commande. Elle est réservée aux Croupiers.", ephemeral=True)
+    else:
+        print(f"Erreur dans /leaderboardcroup: {error}")
+        await interaction.response.send_message("Une erreur inconnue s'est produite.", ephemeral=True)
 
-    duels.pop(duel_a_annuler)
 
-    try:
-        channel = interaction.channel
-        message = await channel.fetch_message(duel_a_annuler)
-        if message.embeds:
-            embed = message.embeds[0]
-            embed.color = discord.Color.red()
-            embed.title += " (Annulé)"
-            embed.description = "⚠️ Ce duel a été annulé par son créateur."
-            await message.edit(embed=embed, view=None)
-    except Exception:
-        pass
-
-    await interaction.followup.send("✅ Ton duel a bien été annulé.", ephemeral=True)
+# --- ÉVÉNEMENTS DU BOT (CORRIGÉ) ---
 
 @bot.event
-async def on_ready():
-    print(f"{bot.user} est prêt !")
-    try:
-        await bot.tree.sync()
-        print("✅ Commandes synchronisées.")
-    except Exception as e:
-        print(f"Erreur : {e}")
+async def on_message(message):
+    """Analyse les messages de log et met à jour les mises en une seule transaction."""
+
+    # 1. FILTRAGE BOT: On ignore si l'auteur est le bot Leaderboard lui-même.
+    if message.author == bot.user:
+        await bot.process_commands(message)
+        return
+
+    # 2. FILTRAGE CANAL: Le message doit venir du salon de log.
+    is_log_channel = message.channel.id == ID_SALON_LOG_COMMISSION
+    if not is_log_channel:
+        await bot.process_commands(message)
+        return
+
+    # 3. FILTRAGE AUTEUR: Vérifie si l'auteur est autorisé.
+    # a) Est-ce un bot de jeu ?
+    is_game_bot = message.author.id in ID_BOTS_DE_JEU
+    # b) Est-ce un humain autorisé manuellement ?
+    is_allowed_human = message.author.id in ID_HUMAINS_AUTORISES
+
+    # Si l'auteur n'est NI un bot de jeu, NI un humain autorisé, on ignore.
+    if not is_game_bot and not is_allowed_human:
+        # On peut optionally envoyer un message d'erreur si l'on voulait, 
+        # mais ici on veut simplement ignorer les messages non-log.
+        await bot.process_commands(message)
+        return
+
+    # NOTE IMPORTANTE SUR LA REGEX :
+    # La regex actuelle (LOG_REGEX) est très spécifique au format "Duel : <@J1> vs <@J2> (Mise : X kamas par joueur)".
+    # Si les messages des NOUVEAUX bots de jeu ont un format différent, 
+    # vous devrez :
+    # a) Soit adapter la regex pour les capturer tous (plus complexe).
+    # b) Soit ajouter d'autres conditions/regex pour traiter les formats spécifiques de chaque bot.
+    # Pour l'instant, on suppose que le format de log est le même.
+
+    # 2. LOGIQUE REGEX (inchangée)
+    match = LOG_REGEX.search(message.content)
+    # ... (le reste du code est inchangé)
+
+    if match:
+        player1_id = extract_id(match.group(1))
+        player2_id = extract_id(match.group(2))
+        mise_text = match.group(3)
+
+        try:
+            cleaned_mise_text = mise_text.replace(' ', '').replace('\u00A0', '').replace('\u202F', '')
+            mise_amount = int(cleaned_mise_text)
+        except ValueError:
+            print(f"❌ Erreur: Le montant de mise n'est pas valide : {mise_text!r}")
+            return
+
+        if player1_id and player2_id and mise_amount > 0:
+            # Appel de la fonction process_duel_mises pour une seule transaction
+            await bot.loop.run_in_executor(
+                None, 
+                process_duel_mises, 
+                player1_id, 
+                player2_id, 
+                mise_amount
+            )
+
+    await bot.process_commands(message)
+
 
 keep_alive()
 bot.run(token)
