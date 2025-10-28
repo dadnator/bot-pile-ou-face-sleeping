@@ -327,6 +327,14 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+@bot.event
+async def on_ready():
+    print(f"{bot.user} est prêt !")
+    try:
+        await bot.tree.sync()
+        print("✅ Commandes synchronisées.")
+    except Exception as e:
+        print(f"Erreur : {e}")
 
 keep_alive()
 bot.run(token)
